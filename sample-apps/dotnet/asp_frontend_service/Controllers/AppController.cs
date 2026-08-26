@@ -103,6 +103,41 @@ public class AppController : ControllerBase
         return "Application started!";
     }
 
+    // Trivial in-process readiness route. Serves as both the provisioning readiness probe and the
+    // downstream target for /success, so neither depends on anything outside this process.
+    [HttpGet]
+    [Route("/health")]
+    public string Health()
+    {
+        return "healthy";
+    }
+
+    // Makes a real HttpClient call to this application's own /health route. This produces the
+    // Service Events FunctionCall (`service.function.duration`) data point with status=success and,
+    // via the per-endpoint latency threshold, the latency-triggered IncidentSnapshot at HTTP 200.
+    // Unlike /outgoing-http-call (which reaches a public site) the downstream hop stays on loopback,
+    // so neither signal depends on DNS, TLS or egress from the test VPC.
+    [HttpGet]
+    [Route("/success")]
+    public string Success()
+    {
+        var endpoint = $"{this.Request.Scheme}://{this.Request.Host}/health";
+        _ = this.httpClient.GetAsync(endpoint).Result;
+
+        return this.GetTraceId();
+    }
+
+    // Throws so the request completes with HTTP 500 and a captured exception. This is the
+    // trigger for the Service Events exception-type IncidentSnapshot and the EndpointErrorMetric
+    // `count` data point. The thrown type surfaces on the snapshot as the fully-qualified .NET
+    // type name (System.InvalidOperationException).
+    [HttpGet]
+    [Route("/exception")]
+    public string Exception()
+    {
+        throw new InvalidOperationException("intentional exception for service events e2e test");
+    }
+
     private string GetTraceId()
     {
         var traceId = Activity.Current.TraceId.ToHexString();
