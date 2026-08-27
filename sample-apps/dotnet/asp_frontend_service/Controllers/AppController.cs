@@ -127,6 +127,28 @@ public class AppController : ControllerBase
         return this.GetTraceId();
     }
 
+    // Makes an HttpClient call that fails, producing the Service Events FunctionCall data point
+    // with status=error. /exception cannot cover this: it throws inside the controller without
+    // making an outbound call, so no HttpClient activity exists for FunctionCall to record. The
+    // target is a closed loopback port, so the connection is refused immediately and deterministically
+    // without DNS, TLS or egress. The exception is swallowed because the failed downstream call is
+    // the signal under test; the request itself returning 200 keeps it distinct from /exception.
+    [HttpGet]
+    [Route("/failed-call")]
+    public string FailedCall()
+    {
+        try
+        {
+            _ = this.httpClient.GetAsync("http://127.0.0.1:1/").Result;
+        }
+        catch (Exception)
+        {
+            // Expected: the point is the failed HttpClient activity, not the response.
+        }
+
+        return this.GetTraceId();
+    }
+
     // Throws so the request completes with HTTP 500 and a captured exception. This is the
     // trigger for the Service Events exception-type IncidentSnapshot and the EndpointErrorMetric
     // `count` data point. The thrown type surfaces on the snapshot as the fully-qualified .NET

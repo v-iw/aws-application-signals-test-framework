@@ -6,8 +6,17 @@
     "__unit__": "^Microseconds$",
     "operation": "^GET /?success$",
     "function.name": "^System\\.Net\\.Http\\.HttpRequestOut$",
-    "aws.service_events.caller": "^.+$",
+    "aws.service_events.caller": "^Microsoft\\.AspNetCore\\.Hosting\\.HttpRequestIn$",
     "status": "^success$",
+    "__value__": ">0"
+  },
+  {
+    "Telemetry.Source": "^ServiceEvents$",
+    "__name__": "^service\\.function\\.duration$",
+    "operation": "^GET /?failed-call$",
+    "function.name": "^System\\.Net\\.Http\\.HttpRequestOut$",
+    "aws.service_events.caller": "^Microsoft\\.AspNetCore\\.Hosting\\.HttpRequestIn$",
+    "status": "^error$",
     "__value__": ">0"
   }
 ]

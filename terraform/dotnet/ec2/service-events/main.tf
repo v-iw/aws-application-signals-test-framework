@@ -340,6 +340,7 @@ resource "null_resource" "main_service_setup" {
       }
       check_route /health 200
       check_route /success 200
+      check_route /failed-call 200
       check_route /exception 500
 
       EOF
@@ -377,6 +378,7 @@ resource "null_resource" "traffic_generator_setup" {
         tmux send-keys -t traffic-generator "while true; do \
           curl -s -o /dev/null http://127.0.0.1:8080/ ; \
           curl -s -o /dev/null http://127.0.0.1:8080/success ; \
+          curl -s -o /dev/null http://127.0.0.1:8080/failed-call ; \
           curl -s -o /dev/null http://127.0.0.1:8080/exception ; \
           sleep 5 ; \
         done" C-m

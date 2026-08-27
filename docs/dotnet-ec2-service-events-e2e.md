@@ -38,13 +38,19 @@ emits autonomously from the frontend. A tmux loop on the instance drives three r
 | Route | Result | Signals it gates |
 |---|---|---|
 | `/` | 200 | baseline traffic |
-| `/success` | 200 | FunctionCall, and the latency IncidentSnapshot |
+| `/success` | 200 | FunctionCall `status=success`, and the latency IncidentSnapshot |
+| `/failed-call` | 200 | FunctionCall `status=error` |
 | `/exception` | 500 | exception IncidentSnapshot, EndpointErrorMetric |
 
 `/success` makes an in-process `HttpClient` call to the application's own `/health` route. That
 keeps a real downstream span in the picture while removing DNS, TLS, and egress from the test
 outcome. The application binds to loopback, since all traffic originates on the instance and the
 validators query CloudWatch rather than the app.
+
+`/failed-call` targets a closed loopback port so the connection is refused immediately. It exists
+because `/exception` cannot produce a FunctionCall error: it throws inside the controller without
+making an outbound call, so no `HttpClient` activity is created for FunctionCall to record. The
+request itself returns 200, which keeps it distinct from `/exception`.
 
 The DeploymentEvent is emitted once, at startup.
 
@@ -56,7 +62,21 @@ The DeploymentEvent is emitted once, at startup.
 | `incident-snapshot-validation.yml` | cw-log | `exception` trigger, HTTP 500, exception type, trace/span IDs |
 | `incident-snapshot-latency-validation.yml` | cw-log | `latency` trigger, HTTP 200, trace/span IDs |
 | `endpoint-error-metric-validation.yml` | promql | `count`, operation, exception dimension |
-| `function-call-metric-validation.yml` | promql | `service.function.duration`, function name, caller, `status=success` |
+| `function-call-metric-validation.yml` | promql | `service.function.duration`, function name, caller, `status=success` and `status=error` |
+
+### What FunctionCall covers on .NET, and what it does not
+
+The function name asserted is `System.Net.Http.HttpRequestOut` — an OpenTelemetry `ActivitySource`,
+not application code. That is the extent of what .NET can instrument: it derives FunctionCall from
+Activities, whereas the Java agent applies bytecode advice to arbitrary methods and Python rewrites
+ASTs, so those cells assert real application methods. Same signal name, materially different
+coverage; do not read the .NET cell as equivalent.
+
+The practical consequence is in `OTEL_AWS_SERVICE_EVENTS_PACKAGES_INCLUDE`. In Java and Python it
+takes code-package prefixes. In .NET it matches the derived
+`{ActivitySource.Name}.{OperationName}`, which is why this module defaults it to `System.Net.Http*`.
+A configuration ported over from Java would match nothing and present as an absence of traffic
+rather than as a misconfiguration.
 
 Log signals land in `/aws/service-events/<service.name>`, which Terraform manages with a one-day
 retention so a run does not leave a never-expiring log group behind.
