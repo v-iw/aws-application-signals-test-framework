@@ -75,7 +75,26 @@ locals {
   # group from service.name, so this is also what /aws/service-events/<name> resolves to. Note the
   # non-Service-Events .NET EKS module uses "dotnet-application-" instead; the Service Events
   # convention is the one the validators and the log group depend on.
-  service_name = "dotnet-sample-application-${var.test_id}"
+  service_name   = "dotnet-sample-application-${var.test_id}"
+  log_group_name = "/aws/service-events/${local.service_name}"
+}
+
+# Each run emits into a run-unique Service Events log group. Left to the CW agent these groups are
+# created with never-expire retention and outlive the test, accumulating one orphaned group per run.
+# Managing the group here gives it a one-day retention and makes `terraform destroy` remove it, so
+# even a failed destroy caps storage at a day.
+#
+# The guarantee is weaker here than on EC2. There, destroying the instance also kills the CW agent
+# that would recreate the group. On EKS the agent is a cluster-wide daemonset installed by
+# enable-app-signals.sh and outlives this module, so a late flush after the pod is gone can
+# recreate the group. The one-day retention is what actually bounds the leak in that case.
+resource "aws_cloudwatch_log_group" "service_events" {
+  name              = local.log_group_name
+  retention_in_days = 1
+
+  tags = {
+    Name = "service-events-${var.test_id}"
+  }
 }
 
 # Single instrumented frontend. Unlike the default .NET EKS cell there is no remote service:
@@ -203,6 +222,11 @@ resource "kubernetes_deployment_v1" "dotnet_app_deployment" {
       }
     }
   }
+
+  # The app emits into the managed log group. Making the relationship explicit reverses the order on
+  # destroy: Terraform removes the pod before deleting the group, so the app cannot emit into a
+  # group that is already gone.
+  depends_on = [aws_cloudwatch_log_group.service_events]
 }
 
 resource "kubernetes_service" "dotnet_app_service" {

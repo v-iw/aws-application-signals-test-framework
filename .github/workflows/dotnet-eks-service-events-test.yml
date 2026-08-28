@@ -307,7 +307,8 @@ jobs:
                 -var="test_namespace=${{ env.SAMPLE_APP_NAMESPACE }}" \
                 -var="service_account_aws_access=service-account-${{ env.TESTING_ID }}" \
                 -var="dotnet_app_image=${{ env.MAIN_SAMPLE_APP_IMAGE_ARN }}" \
-                -var="account_id=${{ env.ACCOUNT_ID }}"
+                -var="account_id=${{ env.ACCOUNT_ID }}" \
+                -var="kube_directory_path=${{ github.workspace }}/.kube"
               retry_counter=$((retry_counter+1))
             else
               break
@@ -484,7 +485,8 @@ jobs:
             -var="test_namespace=${{ env.SAMPLE_APP_NAMESPACE }}" \
             -var="service_account_aws_access=service-account-${{ env.TESTING_ID }}" \
             -var="dotnet_app_image=${{ env.MAIN_SAMPLE_APP_IMAGE_ARN }}" \
-            -var="account_id=${{ env.ACCOUNT_ID }}"
+            -var="account_id=${{ env.ACCOUNT_ID }}" \
+            -var="kube_directory_path=${{ github.workspace }}/.kube"
 
       - name: Delete sample app namespace
         if: always()
